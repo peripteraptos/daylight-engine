@@ -292,6 +292,59 @@ class DaylightController:
         self._notify()
         await self.async_apply(entity_ids=entity_ids, force=True, transition=transition)
 
+    # ------------------------------------------------------------------ #
+    # calibration (used by the panel via the websocket API)
+    # ------------------------------------------------------------------ #
+
+    def set_profile(self, entity_id: str, profile: Profile | None) -> None:
+        """Use a new profile for a lamp (``None`` = back to the auto-detected default)."""
+        lamp = self.lamps[entity_id]
+        lamp.profile = profile
+        lamp.profile_from_store = profile is not None
+        lamp.previous_segment = None
+        lamp.last_command = None
+        lamp.last_target = None
+        if profile is None:
+            self._stored_profiles.pop(entity_id, None)
+            self._ensure_profile(lamp, self.hass.states.get(entity_id))
+        else:
+            self._stored_profiles[entity_id] = profile
+
+    def calibration_start(self, entity_id: str) -> bool:
+        """Hand the lamp to the panel. Returns whether it was on before."""
+        if entity_id not in self.lamps:
+            raise KeyError(entity_id)
+        self.calibrating.add(entity_id)
+        state = self.hass.states.get(entity_id)
+        return state is not None and state.state == STATE_ON
+
+    async def async_calibration_end(self, entity_id: str, *, was_on: bool) -> None:
+        """Give the lamp back: switch it off again or re-apply the current target."""
+        self.calibrating.discard(entity_id)
+        lamp = self.lamps.get(entity_id)
+        if lamp is None:
+            return
+        lamp.last_command = None
+        lamp.last_target = None
+        lamp.previous_segment = None
+        if not was_on:
+            await self._async_send("turn_off", {}, [entity_id])
+        elif not lamp.manual:
+            await self.async_apply(entity_ids=[entity_id], force=True, transition=0)
+
+    async def async_preview(
+        self, entity_id: str, profile: Profile, logical: float, kelvin: float
+    ) -> DeviceCommand:
+        """Drive a lamp directly with a (possibly unsaved) profile."""
+        lamp = self.lamps[entity_id]
+        self._ensure_profile(lamp, self.hass.states.get(entity_id))
+        command = profile.resolve(logical, kelvin)
+        data = command.to_service_data()
+        if command.on and lamp.use_transition():
+            data[ATTR_TRANSITION] = 0
+        await self._async_send(command.service, data, [entity_id])
+        return command
+
     @property
     def manual_lamps(self) -> list[str]:
         return sorted(e for e, lamp in self.lamps.items() if lamp.manual)

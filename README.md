@@ -3,7 +3,7 @@
 Tageslicht-folgende Lichtsteuerung für Home Assistant – Nachfolger-Idee zu Adaptive Lighting
 mit globalem Sleep-Modus, Kalibrierprofilen pro Lampe und gemischten RGB/CCT-Dimmkurven.
 
-**Status: Phase 2 – lauffähige Integration.** Kalibrier-Oberfläche (Phase 3) und Proxy-Lichter (Phase 4) folgen.
+**Status: Phase 3 – Integration mit Kalibrier-Panel.** Proxy-Lichter (Phase 4) folgen.
 
 ## Installation
 
@@ -26,10 +26,31 @@ und unter *Einstellungen → Geräte & Dienste* „Daylight Engine“ hinzufüge
 |---|---|
 | `switch.…_automatik` | Automatik für alle Lampen an/aus. Attribute: verwaltete Lampen, Lampen unter manueller Steuerung |
 | `switch.…_sleep_modus` | **Ein** Sleep-Schalter für alle Lampen |
+| `switch.…_volle_helligkeit` | Alle Lampen hell und neutral (z. B. zum Suchen); exklusiv zum Sleep-Modus, endet optional automatisch |
 | `sensor.…_ziel_helligkeit` / `…_ziel_farbtemperatur` | Aktueller globaler Zielwert |
 | `sensor.…_sonnenhohe` | Diagnose, standardmäßig deaktiviert |
 
 Dienste: `daylight_engine.apply` (Zielwert sofort senden) und `daylight_engine.reset_manual`.
+
+## Kalibrierung
+
+In der Seitenleiste erscheint **Daylight** (nur für Admins). Pro Lampe:
+
+- **Live-Vorschau:** Schieberegler für logische Helligkeit und Farbtemperatur steuern die echte Lampe direkt mit
+  dem ungespeicherten Entwurf. Solange die Vorschau läuft, hält sich die Automatik bei dieser Lampe raus; beim
+  Verlassen des Panels (oder wenn der Browser geschlossen wird) bekommt sie die Lampe zurück – war sie vorher aus,
+  geht sie wieder aus.
+- **Abspielen:** fährt einen Bereich (z. B. 0–20 %) in einstellbarer Zeit ab, optional hin und zurück.
+- **Dimmkurve:** Punkte ziehen, Doppelklick fügt Punkte hinzu, „Unteren Bereich vergrößern“ zoomt auf 0–20 %.
+  Beim Ziehen springt die Vorschau auf genau diesen Punkt.
+- **RGB für den unteren Bereich:** schaltet ein RGB-Segment unter die Weißkurve (Grenze frei wählbar). Pro
+  RGB-Punkt gibt es eine **Kanal-Korrektur** (R/G/B), falls die Lampe beim Dimmen farblich kippt.
+- **Vergleichslampe:** läuft synchron mit ihrem gespeicherten Profil mit, um Lampen aufeinander abzustimmen.
+- **JSON:** Profil exportieren/importieren.
+
+Die Vorschau sendet höchstens einen Befehl gleichzeitig (immer den neuesten Wert), damit Zigbee nicht überflutet wird.
+
+![Kalibrier-Panel](docs/04_panel_desktop.png)
 
 ## Verhalten
 
@@ -85,8 +106,14 @@ Profile lassen sich mit `profile_to_dict` / `profile_from_dict` als JSON speiche
 ## Entwickeln
 
 ```bash
-pip install -e ".[test]"   # bringt Home Assistant + Test-Harness mit
+pip install -e ".[test]"   # bringt Home Assistant + Test-Harness + HA-Frontend mit
 pytest
+
+cd frontend && npm install
+npm run build              # baut custom_components/daylight_engine/frontend/daylight-panel.js
+npm test                   # JS-Rechenlogik gegen Python-Fixtures (test/make_fixtures.py)
+node dev/browser-test.mjs  # Panel-Test in headless Chrome gegen simuliertes HA
+python -m http.server -d .. 8765   # dann http://localhost:8765/frontend/dev/ (Panel ohne HA)
 python scripts/simulate_day.py --lat 52.52 --lon 13.405 --step 30
 python scripts/simulate_day.py --profile mein_profil.json      # mit Gerätebefehlen
 ```
@@ -98,5 +125,6 @@ Die Skripte und `engine/` kommen ohne Home Assistant aus.
 ![Tagesverlauf](docs/01_tagesverlauf_heute.png)
 ![Jahreszeiten](docs/02_jahreszeiten.png)
 ![Lampenprofil](docs/03_lampenprofil.png)
+![Panel mobil, dunkel](docs/05_panel_mobile_dark.png)
 
 Neu erzeugen: `python scripts/render_docs.py` (benötigt matplotlib).

@@ -4,7 +4,11 @@
   "codeowners": [],
   "config_flow": true,
   "dependencies": [
-    "light"
+    "frontend",
+    "http",
+    "light",
+    "panel_custom",
+    "websocket_api"
   ],
   "documentation": "https://github.com/your-name/daylight_engine",
   "integration_type": "hub",
@@ -12,5 +16,5 @@
   "issue_tracker": "https://github.com/your-name/daylight_engine/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.1.0"
+  "version": "0.3.0"
 }

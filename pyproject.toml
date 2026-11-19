@@ -5,7 +5,7 @@ description = "Daylight-following light control for Home Assistant"
 requires-python = ">=3.13"
 
 [project.optional-dependencies]
-test = ["pytest-homeassistant-custom-component", "astral>=3.2"]
+test = ["pytest-homeassistant-custom-component", "home-assistant-frontend", "astral>=3.2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

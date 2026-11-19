@@ -14,8 +14,10 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN, SERVICE_APPLY, SERVICE_RESET_MANUAL, SUBENTRY_LAMP
 from .controller import DaylightController, LampGroupConfig
+from .panel import async_register_panel, async_unregister_panel
 from .settings import controller_settings_from_options, target_config_from_options
 from .storage import ProfileStore
+from .websocket import async_register_websocket
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH]
 
@@ -32,7 +34,8 @@ type DaylightConfigEntry = ConfigEntry[RuntimeData]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register services (once, independent of entries)."""
+    """Register services and the websocket API (once, independent of entries)."""
+    async_register_websocket(hass)
 
     def _controller() -> DaylightController:
         entries = [e for e in hass.config_entries.async_entries(DOMAIN) if e.state is ConfigEntryState.LOADED]
@@ -81,6 +84,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DaylightConfigEntry) -> 
     # Platforms first: the switches restore enabled/sleep before the first apply.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     controller.async_start()
+    await async_register_panel(hass)
     entry.async_on_unload(controller.async_stop)
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True
@@ -91,4 +95,6 @@ async def _async_reload(hass: HomeAssistant, entry: DaylightConfigEntry) -> None
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: DaylightConfigEntry) -> bool:
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        async_unregister_panel(hass)
+    return unloaded
