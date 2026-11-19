@@ -55,6 +55,7 @@ def build(lang):
         "data": {
             "transition_mode": "Übergänge" if de else "Transitions",
             "detect_manual": "Manuelle Änderungen erkennen" if de else "Detect manual changes",
+            "proxy": "Proxy-Licht anlegen" if de else "Create proxy light",
         },
         "data_description": {
             "transition_mode": (
@@ -66,6 +67,11 @@ def build(lang):
                 "Ändert jemand Helligkeit oder Farbe, pausiert die Lampe bis zum nächsten Aus/An."
                 if de
                 else "If someone changes brightness or colour, the light pauses until it is switched off/on."
+            ),
+            "proxy": (
+                "Legt zusätzlich „<Name> Daylight“ an: schaltet ohne Aufblitzen ein, und sein Helligkeitsregler nutzt die Kalibrierung. In Dashboards und Automationen statt der Originallampe verwenden."
+                if de
+                else "Also creates “<name> Daylight”: switches on without flashing, and its brightness slider uses the calibration. Use it in dashboards and automations instead of the original light."
             ),
         },
     }
@@ -215,6 +221,11 @@ def build(lang):
                         "Eine der Lampen ist bereits in einem anderen Eintrag."
                         if de
                         else "One of the lights is already used in another entry."
+                    ),
+                    "proxy_not_allowed": (
+                        "Proxy-Lichter von Daylight Engine können nicht selbst gesteuert werden – wähle die Originallampe."
+                        if de
+                        else "Daylight Engine proxy lights cannot be managed themselves – select the original light."
                     ),
                 },
                 "abort": {"reconfigure_successful": "Gespeichert." if de else "Saved."},

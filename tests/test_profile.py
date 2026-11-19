@@ -143,3 +143,18 @@ def test_rejects_newer_schema():
     data["version"] = 99
     with pytest.raises(ValueError):
         profile_from_dict(data)
+
+
+def test_estimate_logical_inverts_the_profile():
+    from custom_components.daylight_engine.engine.profile import estimate_logical
+
+    p = rgb_cct_profile()
+    for logical in (2, 5, 9, 20, 40, 75, 100):
+        cmd = p.resolve(logical, 2700)
+        rgb_mode = cmd.rgb_color is not None
+        estimate = estimate_logical(p, cmd.brightness, rgb_mode=rgb_mode)
+        assert p.resolve(estimate, 2700).brightness == cmd.brightness
+        assert abs(estimate - logical) < 1.5
+    # The same device brightness exists in both segments; the colour mode decides.
+    assert estimate_logical(p, pct_to_ha_brightness(10), rgb_mode=True) < 10
+    assert estimate_logical(p, pct_to_ha_brightness(10), rgb_mode=False) > 10

@@ -6,7 +6,7 @@ import logging
 import time
 from collections import deque
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from functools import partial
 from typing import Any
@@ -62,6 +62,7 @@ from .const import (
 )
 from .engine import (
     DeviceCommand,
+    DimmableProfile,
     OnOffProfile,
     Profile,
     SleepAction,
@@ -72,9 +73,12 @@ from .engine import (
     compute_target,
     default_profile,
     detect_capabilities,
+    estimate_logical,
     resolve_lamp_command,
     solar_position,
 )
+from .engine.detect import COLOR_MODES_RGB
+from .engine.profile import pct_to_ha_brightness
 from .settings import ControllerSettings
 
 _LOGGER = logging.getLogger(__name__)
@@ -127,6 +131,20 @@ class LampState:
     last_target: tuple[float, float, TargetMode] | None = None
     last_command: DeviceCommand | None = None
     expect_reports_until: datetime | None = None
+    override_brightness: float | None = None
+    """Logical brightness chosen via the proxy light; the colour temperature keeps following."""
+    override_kelvin: float | None = None
+    """Colour temperature chosen via the proxy light; the brightness keeps following."""
+    override_since: datetime | None = None
+    logical: tuple[float, float] | None = None
+    """Logical (brightness %, kelvin) last sent – what the proxy light reports."""
+
+    @property
+    def has_override(self) -> bool:
+        return self.override_brightness is not None or self.override_kelvin is not None
+
+    def clear_override(self) -> None:
+        self.override_brightness = self.override_kelvin = self.override_since = None
 
     def use_transition(self) -> bool:
         if self.group.transition_mode == TRANSITION_ALWAYS:
@@ -245,6 +263,9 @@ class DaylightController:
     async def async_set_sleep(self, sleep: bool, *, apply: bool = True) -> None:
         if sleep and self.bright:
             await self._async_end_bright(apply=False)
+        if sleep != self.sleep:
+            for lamp in self.lamps.values():
+                lamp.clear_override()
         self.sleep = sleep
         self._recompute_target()
         self._notify()
@@ -261,6 +282,7 @@ class DaylightController:
         self.bright = True
         for lamp in self.lamps.values():
             lamp.manual, lamp.manual_since = False, None
+            lamp.clear_override()
         self._cancel_bright_timer()
         if self.settings.bright_timeout > 0:
             self._bright_timer = async_call_later(
@@ -305,6 +327,7 @@ class DaylightController:
             lamp = self.lamps[entity_id]
             lamp.manual = False
             lamp.manual_since = None
+            lamp.clear_override()
         self._notify()
         if apply:
             await self.async_apply(entity_ids=list(targets), force=True)
@@ -435,6 +458,124 @@ class DaylightController:
         if preview is not None and preview.timer is not None:
             preview.timer()
 
+    # ------------------------------------------------------------------ #
+    # proxy lights
+    # ------------------------------------------------------------------ #
+
+    async def async_proxy_turn_on(
+        self,
+        entity_id: str,
+        *,
+        brightness: float | None = None,
+        kelvin: float | None = None,
+        color: Mapping[str, Any] | None = None,
+        transition: float | None = None,
+    ) -> None:
+        """Switch a lamp on through its proxy: calibrated values in one command, no flash.
+
+        ``brightness`` is logical (0-100 %). An explicit ``color`` (e.g. ``hs_color``)
+        is passed through and pauses the automatic control for that lamp.
+        """
+        lamp = self.lamps[entity_id]
+        state = self.hass.states.get(entity_id)
+        self._ensure_profile(lamp, state)
+        now = dt_util.utcnow()
+        target = self.target or self._recompute_target()
+        extra = {} if transition is None else {ATTR_TRANSITION: transition}
+
+        if lamp.profile is None:  # unknown capabilities: plain pass-through
+            data = dict(color or {})
+            if brightness is not None:
+                data[ATTR_BRIGHTNESS] = pct_to_ha_brightness(brightness)
+            await self._async_send("turn_on", {**data, **extra}, [entity_id])
+            return
+
+        last_brightness, last_kelvin = lamp.logical or (target.brightness, target.kelvin)
+
+        if color:
+            lamp.manual, lamp.manual_since = True, now
+            lamp.clear_override()
+            logical = brightness if brightness is not None else last_brightness
+            data = dict(color)
+            if isinstance(lamp.profile, DimmableProfile):
+                data[ATTR_BRIGHTNESS] = lamp.profile.resolve(max(logical, 0.01), last_kelvin).brightness
+            lamp.logical = (logical, last_kelvin)
+            lamp.last_command = None
+            lamp.expect_reports_until = now + REPORT_GRACE
+            await self._async_send("turn_on", {**data, **extra}, [entity_id])
+            self._notify()
+            return
+
+        if brightness is None and kelvin is None and lamp.manual:
+            # Plain "on" while paused (e.g. a colour was chosen): don't touch the colour.
+            await self._async_send("turn_on", extra, [entity_id])
+            return
+
+        if brightness is not None or kelvin is not None:
+            lamp.manual, lamp.manual_since = False, None
+            if brightness is not None:
+                lamp.override_brightness = max(0.1, min(100.0, brightness))
+            if kelvin is not None:
+                lamp.override_kelvin = kelvin
+            lamp.override_since = now
+
+        if self.enabled:
+            lamp_target = self._lamp_target(lamp, target)
+        else:
+            lamp_target = Target(
+                brightness=lamp.override_brightness or last_brightness,
+                kelvin=lamp.override_kelvin or last_kelvin,
+            )
+        command = self._command_for(lamp, lamp_target, turned_on=True)
+        if command is None or not command.on:
+            command = (
+                DeviceCommand(on=True, segment=1)
+                if isinstance(lamp.profile, OnOffProfile)
+                else lamp.profile.resolve_minimum(lamp_target.kelvin)
+            )
+        lamp.last_command = command
+        lamp.last_target = (lamp_target.brightness, lamp_target.kelvin, lamp_target.mode)
+        lamp.logical = (lamp_target.brightness, lamp_target.kelvin)
+        if command.segment is not None:
+            lamp.previous_segment = command.segment
+        lamp.expect_reports_until = now + timedelta(seconds=transition or 0) + REPORT_GRACE
+        await self._async_send("turn_on", {**command.to_service_data(), **extra}, [entity_id])
+        self._notify()
+
+    async def async_proxy_turn_off(self, entity_id: str, *, transition: float | None = None) -> None:
+        extra = {} if transition is None else {ATTR_TRANSITION: transition}
+        await self._async_send("turn_off", extra, [entity_id])
+
+    def proxy_view(self, entity_id: str) -> tuple[float | None, float | None, bool]:
+        """(logical brightness %, kelvin, follows_profile) as the proxy should report it.
+
+        If the source still shows what we sent, report the logical values we
+        sent; otherwise estimate them from the source state.
+        """
+        lamp = self.lamps[entity_id]
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state != STATE_ON:
+            return (
+                lamp.logical[0] if lamp.logical else None,
+                lamp.logical[1] if lamp.logical else None,
+                True,
+            )
+        trusted = lamp.logical is not None and (
+            (lamp.last_command is not None and _state_matches(lamp.last_command, state))
+            or (lamp.expect_reports_until is not None and dt_util.utcnow() <= lamp.expect_reports_until)
+        )
+        if trusted and not lamp.manual:
+            return (lamp.logical[0], lamp.logical[1], True)
+        kelvin = state.attributes.get(ATTR_COLOR_TEMP_KELVIN) or (lamp.logical[1] if lamp.logical else None)
+        ha_brightness = state.attributes.get(ATTR_BRIGHTNESS)
+        if isinstance(lamp.profile, DimmableProfile) and ha_brightness:
+            rgb_mode = state.attributes.get("color_mode") in COLOR_MODES_RGB
+            logical = estimate_logical(lamp.profile, ha_brightness, rgb_mode=rgb_mode)
+        else:
+            logical = 100.0 if ha_brightness is None else ha_brightness / 255 * 100
+        follows = not lamp.manual
+        return (logical, kelvin, follows)
+
     @property
     def manual_lamps(self) -> list[str]:
         return sorted(e for e, lamp in self.lamps.items() if lamp.manual)
@@ -491,9 +632,25 @@ class DaylightController:
             or abs(kelvin - target.kelvin) >= self.settings.min_kelvin_change
         )
 
+    @staticmethod
+    def _lamp_target(lamp: LampState, target: Target) -> Target:
+        """Global target with the lamp's proxy overrides applied."""
+        if not lamp.has_override:
+            return target
+        return replace(
+            target,
+            brightness=lamp.override_brightness
+            if lamp.override_brightness is not None
+            else target.brightness,
+            kelvin=lamp.override_kelvin if lamp.override_kelvin is not None else target.kelvin,
+        )
+
     def _command_for(self, lamp: LampState, target: Target, *, turned_on: bool) -> DeviceCommand | None:
         assert lamp.profile is not None
         action = lamp.group.sleep_action
+        if lamp.has_override:
+            # An explicit choice on the proxy wins over the sleep behaviour.
+            action = SleepAction.FOLLOW
         if turned_on and target.mode is TargetMode.SLEEP and action is SleepAction.OFF:
             # The user deliberately switched a lamp on during sleep: dim it, don't fight them.
             action = SleepAction.MINIMUM
@@ -556,11 +713,12 @@ class DaylightController:
             if lamp.profile is None:
                 _LOGGER.debug("%s: skipped, no profile (attributes not available yet)", entity_id)
                 continue
-            if not force and not self._significant_change(lamp, target):
+            lamp_target = self._lamp_target(lamp, target)
+            if not force and not self._significant_change(lamp, lamp_target):
                 continue
 
-            command = self._command_for(lamp, target, turned_on=turned_on)
-            lamp.last_target = (target.brightness, target.kelvin, target.mode)
+            command = self._command_for(lamp, lamp_target, turned_on=turned_on)
+            lamp.last_target = (lamp_target.brightness, lamp_target.kelvin, lamp_target.mode)
             if command is None:
                 _LOGGER.debug("%s: nothing to do for %s profile", entity_id, lamp.profile.kind)
                 continue
@@ -576,6 +734,8 @@ class DaylightController:
                     continue
                 self._bright_turned_on.add(entity_id)
             lamp.last_command = command
+            if command.on:
+                lamp.logical = (lamp_target.brightness, lamp_target.kelvin)
             if command.segment is not None:
                 lamp.previous_segment = command.segment
             lamp.expect_reports_until = now + timedelta(seconds=used_transition) + REPORT_GRACE
@@ -621,6 +781,8 @@ class DaylightController:
         for lamp in self.lamps.values():
             if lamp.manual and lamp.manual_since is not None and lamp.manual_since <= limit:
                 lamp.manual, lamp.manual_since = False, None
+            if lamp.has_override and lamp.override_since is not None and lamp.override_since <= limit:
+                lamp.clear_override()
 
     @callback
     def _handle_state_change(self, event: Event[EventStateChangedData]) -> None:
@@ -640,8 +802,9 @@ class DaylightController:
         if not is_on:
             lamp.last_command = None
             lamp.last_target = None
-            if was_on and self.settings.reset_manual_on_off and lamp.manual:
+            if was_on and self.settings.reset_manual_on_off and (lamp.manual or lamp.has_override):
                 lamp.manual, lamp.manual_since = False, None
+                lamp.clear_override()
                 self._notify()
             return
 

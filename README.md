@@ -3,7 +3,7 @@
 Tageslicht-folgende Lichtsteuerung für Home Assistant – Nachfolger-Idee zu Adaptive Lighting
 mit globalem Sleep-Modus, Kalibrierprofilen pro Lampe und gemischten RGB/CCT-Dimmkurven.
 
-**Status: Phase 3 – Integration mit Kalibrier-Panel.** Proxy-Lichter (Phase 4) folgen.
+**Status: Phase 4 – Integration mit Kalibrier-Panel und Proxy-Lichtern.**
 
 ## Installation
 
@@ -14,7 +14,8 @@ und unter *Einstellungen → Geräte & Dienste* „Daylight Engine“ hinzufüge
 ## Einrichtung
 
 - **Lampen:** im Integrationseintrag über *Lampe hinzufügen*. Mehrere Lampen mit gleichen Einstellungen dürfen
-  in einen Eintrag. Pro Eintrag: Verhalten im Sleep-Modus, unter *Erweitert* Übergänge und Erkennung manueller Änderungen.
+  in einen Eintrag. Pro Eintrag: Verhalten im Sleep-Modus, unter *Erweitert* Übergänge, Erkennung manueller Änderungen
+  und *Proxy-Licht anlegen*.
 - **Tageslichtkurve:** über *Konfigurieren*, aufgeteilt in Farbtemperatur, Helligkeit, Sleep-Modus,
   Aktualisierung und manuelle Änderungen (alle außer Farbtemperatur standardmäßig eingeklappt).
 - **Lampentyp:** wird automatisch aus den Home-Assistant-Attributen erkannt (Farbmodi, Kelvin-Bereich, Übergänge) –
@@ -32,6 +33,23 @@ und unter *Einstellungen → Geräte & Dienste* „Daylight Engine“ hinzufüge
 
 Dienste: `daylight_engine.apply` (Zielwert sofort senden) und `daylight_engine.reset_manual`.
 
+## Proxy-Lichter
+
+Mit *Erweitert → Proxy-Licht anlegen* bekommt jede Lampe des Eintrags ein zusätzliches Licht „<Name> Daylight“
+(z. B. `light.stehlampe_daylight`). Es wird in Dashboards, Automationen und Sprachassistenten statt der
+Originallampe verwendet:
+
+- **Einschalten ohne Aufblitzen:** Der Proxy sendet sofort die passenden Werte in einem einzigen Befehl.
+- **Kalibrierter Regler:** 5 % am Proxy sind 5 % *logisch* – inklusive RGB-Bereich und Kanal-Korrektur. „Alle auf
+  20 %“ sieht dadurch überall gleich aus. RGB-only-Lampen (z. B. WLED) bekommen über ihr Profil einen
+  Farbtemperatur-Modus.
+- **Teilweise manuell:** Nur Helligkeit gesetzt → die Farbtemperatur folgt weiter dem Tageslicht (und umgekehrt).
+  Farbe gewählt → die Lampe pausiert, bis sie aus- und wieder eingeschaltet wird (oder eine Farbtemperatur
+  gewählt wird). Ausschalten, `reset_manual`, Sleep-Modus und „Volle Helligkeit“ heben das auf.
+- Wird die Originallampe direkt geändert, zeigt der Proxy die passende logische Helligkeit (zurückgerechnet).
+
+Die Originallampe bleibt unverändert nutzbar; dort greift wie bisher die Korrektur nach dem Einschalten.
+
 ## Kalibrierung
 
 In der Seitenleiste erscheint **Daylight** (nur für Admins). Pro Lampe:
@@ -47,8 +65,8 @@ In der Seitenleiste erscheint **Daylight** (nur für Admins). Pro Lampe:
   RGB-Punkt gibt es eine **Kanal-Korrektur** (R/G/B), falls die Lampe beim Dimmen farblich kippt.
 - **Vergleichslampe:** läuft synchron mit ihrem gespeicherten Profil mit, um Lampen aufeinander abzustimmen.
 - **JSON:** Profil exportieren/importieren.
-
-Die Vorschau sendet höchstens einen Befehl gleichzeitig (immer den neuesten Wert), damit Zigbee nicht überflutet wird.
+- **Befehle an die Lampe:** 2, 4 oder 10 pro Sekunde. Die Vorschau bündelt pro Lampe (immer der neueste Wert),
+  überspringt identische Werte und sendet nur, was sich geändert hat – wichtig für Zigbee.
 
 ![Kalibrier-Panel](docs/04_panel_desktop.png)
 

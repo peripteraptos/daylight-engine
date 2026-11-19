@@ -132,11 +132,13 @@
               "name": "Advanced",
               "data": {
                 "transition_mode": "Transitions",
-                "detect_manual": "Detect manual changes"
+                "detect_manual": "Detect manual changes",
+                "proxy": "Create proxy light"
               },
               "data_description": {
                 "transition_mode": "Automatic = only if the light reports transition support. Many Wi-Fi lights jump anyway – choose 'never' then.",
-                "detect_manual": "If someone changes brightness or colour, the light pauses until it is switched off/on."
+                "detect_manual": "If someone changes brightness or colour, the light pauses until it is switched off/on.",
+                "proxy": "Also creates “<name> Daylight”: switches on without flashing, and its brightness slider uses the calibration. Use it in dashboards and automations instead of the original light."
               }
             }
           }
@@ -156,11 +158,13 @@
               "name": "Advanced",
               "data": {
                 "transition_mode": "Transitions",
-                "detect_manual": "Detect manual changes"
+                "detect_manual": "Detect manual changes",
+                "proxy": "Create proxy light"
               },
               "data_description": {
                 "transition_mode": "Automatic = only if the light reports transition support. Many Wi-Fi lights jump anyway – choose 'never' then.",
-                "detect_manual": "If someone changes brightness or colour, the light pauses until it is switched off/on."
+                "detect_manual": "If someone changes brightness or colour, the light pauses until it is switched off/on.",
+                "proxy": "Also creates “<name> Daylight”: switches on without flashing, and its brightness slider uses the calibration. Use it in dashboards and automations instead of the original light."
               }
             }
           }
@@ -168,7 +172,8 @@
       },
       "error": {
         "no_lights": "Select at least one light.",
-        "light_in_use": "One of the lights is already used in another entry."
+        "light_in_use": "One of the lights is already used in another entry.",
+        "proxy_not_allowed": "Daylight Engine proxy lights cannot be managed themselves – select the original light."
       },
       "abort": {
         "reconfigure_successful": "Saved."

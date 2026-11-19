@@ -132,11 +132,13 @@
               "name": "Erweitert",
               "data": {
                 "transition_mode": "Übergänge",
-                "detect_manual": "Manuelle Änderungen erkennen"
+                "detect_manual": "Manuelle Änderungen erkennen",
+                "proxy": "Proxy-Licht anlegen"
               },
               "data_description": {
                 "transition_mode": "Automatisch = nur wenn die Lampe Übergänge meldet. Viele WLAN-Lampen springen trotzdem – dann 'Nie' wählen.",
-                "detect_manual": "Ändert jemand Helligkeit oder Farbe, pausiert die Lampe bis zum nächsten Aus/An."
+                "detect_manual": "Ändert jemand Helligkeit oder Farbe, pausiert die Lampe bis zum nächsten Aus/An.",
+                "proxy": "Legt zusätzlich „<Name> Daylight“ an: schaltet ohne Aufblitzen ein, und sein Helligkeitsregler nutzt die Kalibrierung. In Dashboards und Automationen statt der Originallampe verwenden."
               }
             }
           }
@@ -156,11 +158,13 @@
               "name": "Erweitert",
               "data": {
                 "transition_mode": "Übergänge",
-                "detect_manual": "Manuelle Änderungen erkennen"
+                "detect_manual": "Manuelle Änderungen erkennen",
+                "proxy": "Proxy-Licht anlegen"
               },
               "data_description": {
                 "transition_mode": "Automatisch = nur wenn die Lampe Übergänge meldet. Viele WLAN-Lampen springen trotzdem – dann 'Nie' wählen.",
-                "detect_manual": "Ändert jemand Helligkeit oder Farbe, pausiert die Lampe bis zum nächsten Aus/An."
+                "detect_manual": "Ändert jemand Helligkeit oder Farbe, pausiert die Lampe bis zum nächsten Aus/An.",
+                "proxy": "Legt zusätzlich „<Name> Daylight“ an: schaltet ohne Aufblitzen ein, und sein Helligkeitsregler nutzt die Kalibrierung. In Dashboards und Automationen statt der Originallampe verwenden."
               }
             }
           }
@@ -168,7 +172,8 @@
       },
       "error": {
         "no_lights": "Bitte mindestens eine Lampe wählen.",
-        "light_in_use": "Eine der Lampen ist bereits in einem anderen Eintrag."
+        "light_in_use": "Eine der Lampen ist bereits in einem anderen Eintrag.",
+        "proxy_not_allowed": "Proxy-Lichter von Daylight Engine können nicht selbst gesteuert werden – wähle die Originallampe."
       },
       "abort": {
         "reconfigure_successful": "Gespeichert."

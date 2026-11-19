@@ -11,6 +11,7 @@ from .profile import (
     Profile,
     RgbPoint,
     RgbSegment,
+    estimate_logical,
     profile_from_dict,
     profile_to_dict,
 )
@@ -50,6 +51,7 @@ __all__ = [
     "compute_target_at",
     "default_profile",
     "detect_capabilities",
+    "estimate_logical",
     "profile_from_dict",
     "profile_to_dict",
     "resolve_lamp_command",

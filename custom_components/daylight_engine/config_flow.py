@@ -18,6 +18,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import section
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     BooleanSelector,
     EntitySelector,
@@ -35,6 +36,7 @@ from .const import (
     CONF_ADVANCED,
     CONF_DETECT_MANUAL,
     CONF_LIGHTS,
+    CONF_PROXY,
     CONF_SLEEP_ACTION,
     CONF_TRANSITION_MODE,
     DOMAIN,
@@ -230,6 +232,7 @@ def _lamp_schema(defaults: Mapping[str, Any]) -> vol.Schema:
                         vol.Required(
                             CONF_DETECT_MANUAL, default=advanced.get(CONF_DETECT_MANUAL, True)
                         ): BooleanSelector(),
+                        vol.Required(CONF_PROXY, default=advanced.get(CONF_PROXY, False)): BooleanSelector(),
                     }
                 ),
                 {"collapsed": True},
@@ -261,8 +264,13 @@ class LampSubentryFlow(ConfigSubentryFlow):
                 if sub_id != subentry_id and sub.subentry_type == SUBENTRY_LAMP
                 for light in sub.data.get(CONF_LIGHTS, [])
             }
+            registry = er.async_get(self.hass)
             if not lights:
                 errors[CONF_LIGHTS] = "no_lights"
+            elif any(
+                (reg := registry.async_get(light)) is not None and reg.platform == DOMAIN for light in lights
+            ):
+                errors[CONF_LIGHTS] = "proxy_not_allowed"
             elif used.intersection(lights):
                 errors[CONF_LIGHTS] = "light_in_use"
             else:

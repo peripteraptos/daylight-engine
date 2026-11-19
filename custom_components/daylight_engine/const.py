@@ -12,6 +12,7 @@ CONF_SLEEP_ACTION: Final = "sleep_action"
 CONF_ADVANCED: Final = "advanced"
 CONF_TRANSITION_MODE: Final = "transition_mode"
 CONF_DETECT_MANUAL: Final = "detect_manual"
+CONF_PROXY: Final = "proxy"
 
 TRANSITION_AUTO: Final = "auto"
 TRANSITION_ALWAYS: Final = "always"

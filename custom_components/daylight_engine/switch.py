@@ -44,9 +44,19 @@ class EnabledSwitch(DaylightEntity, SwitchEntity, RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        overrides = {
+            entity_id: {
+                k: v
+                for k, v in (("brightness", lamp.override_brightness), ("kelvin", lamp.override_kelvin))
+                if v is not None
+            }
+            for entity_id, lamp in sorted(self.controller.lamps.items())
+            if lamp.has_override
+        }
         return {
             "managed_lights": sorted(self.controller.lamps),
             "manual_control": self.controller.manual_lamps,
+            "partial_override": overrides,
         }
 
     async def async_turn_on(self, **kwargs: Any) -> None:

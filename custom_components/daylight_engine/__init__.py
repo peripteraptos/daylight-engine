@@ -19,7 +19,7 @@ from .settings import controller_settings_from_options, target_config_from_optio
 from .storage import ProfileStore
 from .websocket import async_register_websocket
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH]
+PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.SENSOR, Platform.SWITCH]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 

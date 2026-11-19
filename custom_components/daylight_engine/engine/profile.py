@@ -299,6 +299,32 @@ class OnOffProfile:
 Profile = DimmableProfile | OnOffProfile
 
 
+def estimate_logical(profile: DimmableProfile, ha_brightness: int, *, rgb_mode: bool = False) -> float:
+    """Inverse of the profile: which logical brightness produces this device brightness?
+
+    Used when a lamp was changed outside Daylight Engine and its proxy still
+    has to show something meaningful. Prefers segments of the matching type
+    (RGB vs. white); for flat parts of the curve the middle of the range is used.
+    """
+    samples = [i / 10 for i in range(1, 1001)]
+    wanted = RgbSegment if rgb_mode else CctSegment
+
+    def candidates(only_matching: bool) -> list[tuple[float, int]]:
+        out = []
+        for logical in samples:
+            index = profile.segment_index(logical)
+            if only_matching and not isinstance(profile.segments[index], wanted):
+                continue
+            command = profile.resolve(logical, 2700)
+            out.append((logical, abs((command.brightness or 0) - ha_brightness)))
+        return out
+
+    pool = candidates(True) or candidates(False)
+    best = min(diff for _, diff in pool)
+    matches = [logical for logical, diff in pool if diff == best]
+    return round((matches[0] + matches[-1]) / 2, 1)
+
+
 # --------------------------------------------------------------------------- #
 # Serialisation (for HA storage and import/export)
 # --------------------------------------------------------------------------- #
