@@ -16,6 +16,7 @@ from .profile import (
 )
 from .sun import SolarPosition, solar_position
 from .target import (
+    BrightTarget,
     Curve,
     Ramp,
     SleepTarget,
@@ -27,6 +28,7 @@ from .target import (
 )
 
 __all__ = [
+    "BrightTarget",
     "Capabilities",
     "CctSegment",
     "Curve",

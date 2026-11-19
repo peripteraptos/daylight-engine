@@ -99,3 +99,9 @@ def test_continuous_over_a_day():
         assert abs(cur.kelvin - prev.kelvin) < 60
         assert abs(cur.brightness - prev.brightness) < 2
         prev = cur
+
+
+def test_bright_overrides_sleep_and_daylight():
+    t = compute_target(pos(-30, morning=False), CONFIG, sleep=True, bright=True)
+    assert t.mode is TargetMode.BRIGHT
+    assert (t.brightness, t.kelvin) == (CONFIG.bright.brightness, CONFIG.bright.kelvin)

@@ -259,3 +259,68 @@ async def test_stored_profile_is_used(hass: HomeAssistant, setup) -> None:
     await switch_on_externally(hass, "light.desk")
     call = calls_on[-1]
     assert "rgb_color" in call.data and "color_temp_kelvin" not in call.data
+
+
+async def test_bright_mode(hass: HomeAssistant, setup, freezer: FrozenDateTimeFactory) -> None:
+    controller, calls_on, calls_off = setup
+    await switch_on_externally(hass, "light.desk")
+    freezer.tick(timedelta(seconds=30))
+    hass.states.async_set("light.desk", "on", {**CCT_ATTRS, "brightness": 12}, context=Context())
+    await hass.async_block_till_done()
+    assert controller.manual_lamps == ["light.desk"]
+    await controller.async_set_sleep(True)
+    calls_on.clear()
+
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.daylight_full_brightness"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get("switch.daylight_sleep_mode").state == "off"  # exclusive
+    assert controller.manual_lamps == []  # explicit request overrides manual pause
+    desk = [c for c in calls_on if "light.desk" in entity_ids(c)]
+    assert desk[-1].data["brightness"] == 255 and desk[-1].data["color_temp_kelvin"] == 5000
+    assert not any("light.bed" in entity_ids(c) for c in calls_on)  # off lights stay off by default
+
+    # sleep switches bright off again
+    await controller.async_set_sleep(True)
+    assert not controller.bright
+
+
+async def test_bright_mode_turn_on_and_timeout(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
+    options = default_options()
+    options["bright"]["turn_on"] = True
+    options["bright"]["timeout"] = 10
+    hass.states.async_set("light.desk", "off", CCT_ATTRS)
+    hass.states.async_set("light.plug", "off", ONOFF_ATTRS)
+    hass.states.async_set("light.bed", "on", CCT_ATTRS)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Daylight",
+        options=options,
+        subentries_data=[lamp("A", ["light.desk", "light.plug"]), lamp("B", ["light.bed"])],
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    calls_on = async_mock_service(hass, "light", "turn_on")
+    calls_off = async_mock_service(hass, "light", "turn_off")
+    controller = entry.runtime_data.controller
+
+    await controller.async_set_bright(True)
+    switched = sorted(e for c in calls_on for e in entity_ids(c))
+    assert switched == ["light.bed", "light.desk", "light.plug"]
+    # Pretend the devices reported back; the user then turns the plug off and on again himself
+    for call in calls_on:
+        for entity_id in entity_ids(call):
+            attrs = ONOFF_ATTRS if entity_id == "light.plug" else CCT_ATTRS
+            hass.states.async_set(entity_id, "on", attrs, context=call.context)
+    hass.states.async_set("light.plug", "off", ONOFF_ATTRS, context=Context())
+    hass.states.async_set("light.plug", "on", ONOFF_ATTRS, context=Context())
+    await hass.async_block_till_done()
+
+    freezer.tick(timedelta(minutes=11))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert not controller.bright
+    # Only the light the mode switched on (and nobody touched) goes off again
+    assert [e for c in calls_off for e in entity_ids(c)] == ["light.desk"]

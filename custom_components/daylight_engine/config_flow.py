@@ -38,6 +38,7 @@ from .const import (
     CONF_SLEEP_ACTION,
     CONF_TRANSITION_MODE,
     DOMAIN,
+    SECTION_BRIGHT,
     SECTION_BRIGHTNESS,
     SECTION_KELVIN,
     SECTION_MANUAL,
@@ -95,6 +96,19 @@ def options_schema(options: Mapping[str, Any]) -> vol.Schema:
                     {
                         vol.Required("brightness", default=o[SECTION_SLEEP]["brightness"]): percent,
                         vol.Required("kelvin", default=o[SECTION_SLEEP]["kelvin"]): kelvin,
+                    }
+                ),
+                {"collapsed": True},
+            ),
+            vol.Required(SECTION_BRIGHT): section(
+                vol.Schema(
+                    {
+                        vol.Required("brightness", default=o[SECTION_BRIGHT]["brightness"]): percent,
+                        vol.Required("kelvin", default=o[SECTION_BRIGHT]["kelvin"]): kelvin,
+                        vol.Required("timeout", default=o[SECTION_BRIGHT]["timeout"]): _num(
+                            0, 1440, 5, "min"
+                        ),
+                        vol.Required("turn_on", default=o[SECTION_BRIGHT]["turn_on"]): BooleanSelector(),
                     }
                 ),
                 {"collapsed": True},

@@ -73,6 +73,14 @@ class SleepTarget:
     kelvin: float = 2000
 
 
+@dataclass(frozen=True, slots=True)
+class BrightTarget:
+    """Fixed target for the "full brightness" mode (e.g. when searching for something)."""
+
+    brightness: float = 100.0
+    kelvin: float = 5000
+
+
 def _default_kelvin() -> Curve:
     return Curve(
         night=2200,
@@ -98,12 +106,18 @@ class TargetConfig:
     kelvin: Curve = field(default_factory=_default_kelvin)
     brightness: Curve = field(default_factory=_default_brightness)
     sleep: SleepTarget = field(default_factory=SleepTarget)
+    bright: BrightTarget = field(default_factory=BrightTarget)
 
     def __post_init__(self) -> None:
-        for value in (self.kelvin.night, self.kelvin.day, self.sleep.kelvin):
+        for value in (self.kelvin.night, self.kelvin.day, self.sleep.kelvin, self.bright.kelvin):
             if not KELVIN_MIN <= value <= KELVIN_MAX:
                 raise ValueError(f"kelvin {value} outside {KELVIN_MIN}-{KELVIN_MAX}")
-        for value in (self.brightness.night, self.brightness.day, self.sleep.brightness):
+        for value in (
+            self.brightness.night,
+            self.brightness.day,
+            self.sleep.brightness,
+            self.bright.brightness,
+        ):
             if not 0 < value <= 100:
                 raise ValueError(f"brightness {value} outside (0, 100]")
 
@@ -111,6 +125,7 @@ class TargetConfig:
 class TargetMode(StrEnum):
     DAYLIGHT = "daylight"
     SLEEP = "sleep"
+    BRIGHT = "bright"
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,8 +154,18 @@ def compute_target(
     config: TargetConfig,
     *,
     sleep: bool = False,
+    bright: bool = False,
 ) -> Target:
-    """Compute the global light target for a given sun position."""
+    """Compute the global light target for a given sun position.
+
+    ``bright`` wins over ``sleep``; the controller keeps the two exclusive anyway.
+    """
+    if bright:
+        return Target(
+            brightness=config.bright.brightness,
+            kelvin=config.bright.kelvin,
+            mode=TargetMode.BRIGHT,
+        )
     if sleep:
         return Target(
             brightness=config.sleep.brightness,
@@ -167,6 +192,7 @@ def compute_target_at(
     config: TargetConfig,
     *,
     sleep: bool = False,
+    bright: bool = False,
 ) -> Target:
     """Convenience wrapper: target for a point in time and location."""
-    return compute_target(solar_position(when, latitude, longitude), config, sleep=sleep)
+    return compute_target(solar_position(when, latitude, longitude), config, sleep=sleep, bright=bright)

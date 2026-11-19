@@ -64,6 +64,20 @@
               "kelvin": "Colour temperature"
             }
           },
+          "bright": {
+            "name": "Full brightness",
+            "description": "Mode e.g. for searching: all lights bright and neutral.",
+            "data": {
+              "brightness": "Brightness",
+              "kelvin": "Colour temperature",
+              "timeout": "Switch off automatically after",
+              "turn_on": "Switch on lights that are off"
+            },
+            "data_description": {
+              "timeout": "0 = never",
+              "turn_on": "When the mode ends, exactly these lights are switched off again."
+            }
+          },
           "updates": {
             "name": "Updates",
             "data": {
@@ -185,6 +199,9 @@
       },
       "sleep": {
         "name": "Sleep mode"
+      },
+      "bright": {
+        "name": "Full brightness"
       }
     },
     "sensor": {

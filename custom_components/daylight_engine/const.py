@@ -22,6 +22,7 @@ TRANSITION_MODES: Final = (TRANSITION_AUTO, TRANSITION_ALWAYS, TRANSITION_NEVER)
 SECTION_KELVIN: Final = "kelvin"
 SECTION_BRIGHTNESS: Final = "brightness"
 SECTION_SLEEP: Final = "sleep"
+SECTION_BRIGHT: Final = "bright"
 SECTION_UPDATES: Final = "updates"
 SECTION_MANUAL: Final = "manual"
 

@@ -19,3 +19,6 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/gen_translations.py" = ["E501", "E731"]

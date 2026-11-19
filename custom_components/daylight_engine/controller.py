@@ -25,6 +25,7 @@ from homeassistant.components.light import (
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_SUPPORTED_FEATURES,
+    STATE_OFF,
     STATE_ON,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
@@ -39,7 +40,11 @@ from homeassistant.core import (
     callback,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -160,6 +165,11 @@ class DaylightController:
 
         self.enabled = True
         self.sleep = False
+        self.bright = False
+        self.calibrating: set[str] = set()
+        """Lights currently driven by the calibration panel; the controller leaves them alone."""
+        self._bright_turned_on: set[str] = set()
+        self._bright_timer: CALLBACK_TYPE | None = None
         self.position: SolarPosition | None = None
         self.target: Target | None = None
 
@@ -193,6 +203,7 @@ class DaylightController:
 
     @callback
     def async_stop(self) -> None:
+        self._cancel_bright_timer()
         while self._unsubs:
             self._unsubs.pop()()
 
@@ -207,11 +218,59 @@ class DaylightController:
             await self.async_apply(force=True)
 
     async def async_set_sleep(self, sleep: bool, *, apply: bool = True) -> None:
+        if sleep and self.bright:
+            await self._async_end_bright(apply=False)
         self.sleep = sleep
         self._recompute_target()
         self._notify()
         if apply:
             await self.async_apply(force=True)
+
+    async def async_set_bright(self, bright: bool, *, apply: bool = True) -> None:
+        """Full-brightness mode: exclusive with sleep, clears manual overrides, optional auto-off."""
+        if not bright:
+            if self.bright:
+                await self._async_end_bright(apply=apply)
+            return
+        self.sleep = False
+        self.bright = True
+        for lamp in self.lamps.values():
+            lamp.manual, lamp.manual_since = False, None
+        self._cancel_bright_timer()
+        if self.settings.bright_timeout > 0:
+            self._bright_timer = async_call_later(
+                self.hass, self.settings.bright_timeout * 60, self._handle_bright_timeout
+            )
+        self._recompute_target()
+        self._notify()
+        if apply:
+            await self.async_apply(force=True, include_off=self.settings.bright_turn_on)
+
+    async def _async_end_bright(self, *, apply: bool) -> None:
+        self._cancel_bright_timer()
+        self.bright = False
+        to_turn_off = [
+            entity_id
+            for entity_id in self._bright_turned_on
+            if (state := self.hass.states.get(entity_id)) is not None and state.state == STATE_ON
+        ]
+        self._bright_turned_on.clear()
+        if to_turn_off:
+            await self._async_send("turn_off", {}, sorted(to_turn_off))
+        self._recompute_target()
+        self._notify()
+        if apply:
+            await self.async_apply(force=True)
+
+    def _cancel_bright_timer(self) -> None:
+        if self._bright_timer is not None:
+            self._bright_timer()
+            self._bright_timer = None
+
+    @callback
+    def _handle_bright_timeout(self, _now: datetime) -> None:
+        self._bright_timer = None
+        self.hass.async_create_task(self.async_set_bright(False), eager_start=True)
 
     async def async_reset_manual(
         self, entity_ids: Iterable[str] | None = None, *, apply: bool = True
@@ -252,7 +311,7 @@ class DaylightController:
         self.position = solar_position(
             dt_util.utcnow(), self.hass.config.latitude, self.hass.config.longitude
         )
-        self.target = compute_target(self.position, self.target_config, sleep=self.sleep)
+        self.target = compute_target(self.position, self.target_config, sleep=self.sleep, bright=self.bright)
         return self.target
 
     @callback
@@ -297,7 +356,9 @@ class DaylightController:
             action = SleepAction.MINIMUM
 
         if isinstance(lamp.profile, OnOffProfile):
-            # On/off lamps are never switched automatically, except sleep "off".
+            # On/off lamps are never switched automatically, except by the modes.
+            if target.mode is TargetMode.BRIGHT:
+                return DeviceCommand(on=True, segment=1)
             if target.mode is TargetMode.SLEEP and action is SleepAction.OFF:
                 return DeviceCommand.off()
             return None
@@ -313,8 +374,12 @@ class DaylightController:
         force: bool = False,
         turned_on: bool = False,
         transition: float | None = None,
+        include_off: bool = False,
     ) -> None:
-        """Send the current target to lamps that are on and not under manual control."""
+        """Send the current target to lamps that are on and not under manual control.
+
+        ``include_off`` also switches on lamps that are off (full-brightness mode only).
+        """
         if not self.enabled:
             _LOGGER.debug("Apply skipped: automatic control is off")
             return
@@ -334,10 +399,11 @@ class DaylightController:
         batches: dict[tuple[str, tuple[tuple[str, Any], ...]], _Batch] = {}
         for entity_id in list(entity_ids) if entity_ids is not None else list(self.lamps):
             lamp = self.lamps.get(entity_id)
-            if lamp is None:
+            if lamp is None or entity_id in self.calibrating:
                 continue
             state = self.hass.states.get(entity_id)
-            if state is None or state.state != STATE_ON:
+            switch_on = include_off and state is not None and state.state == STATE_OFF
+            if state is None or (state.state != STATE_ON and not switch_on):
                 _LOGGER.debug("%s: skipped, state is %s", entity_id, None if state is None else state.state)
                 continue
             if lamp.manual:
@@ -362,6 +428,10 @@ class DaylightController:
                 data[ATTR_TRANSITION] = used_transition
             if lamp.last_command == command and not force:
                 continue
+            if switch_on:
+                if not command.on:
+                    continue
+                self._bright_turned_on.add(entity_id)
             lamp.last_command = command
             if command.segment is not None:
                 lamp.previous_segment = command.segment
@@ -372,16 +442,19 @@ class DaylightController:
             batch.entity_ids.append(entity_id)
 
         for batch in batches.values():
-            _LOGGER.debug("Sending light.%s %s to %s", batch.service, batch.data, batch.entity_ids)
-            context = Context()
-            self._own_contexts.append(context.id)
-            await self.hass.services.async_call(
-                LIGHT_DOMAIN,
-                batch.service,
-                {**batch.data, ATTR_ENTITY_ID: batch.entity_ids},
-                blocking=False,
-                context=context,
-            )
+            await self._async_send(batch.service, batch.data, batch.entity_ids)
+
+    async def _async_send(self, service: str, data: dict[str, Any], entity_ids: list[str]) -> None:
+        _LOGGER.debug("Sending light.%s %s to %s", service, data, entity_ids)
+        context = Context()
+        self._own_contexts.append(context.id)
+        await self.hass.services.async_call(
+            LIGHT_DOMAIN,
+            service,
+            {**data, ATTR_ENTITY_ID: entity_ids},
+            blocking=False,
+            context=context,
+        )
 
     def _is_own(self, context: Context) -> bool:
         return context.id in self._own_contexts or (
@@ -411,12 +484,15 @@ class DaylightController:
         entity_id = event.data["entity_id"]
         lamp = self.lamps.get(entity_id)
         old, new = event.data["old_state"], event.data["new_state"]
-        if lamp is None or new is None or new.state in _INVALID_STATES:
+        if lamp is None or new is None or new.state in _INVALID_STATES or entity_id in self.calibrating:
             return
         self._ensure_profile(lamp, new)
         was_on = old is not None and old.state == STATE_ON
         is_on = new.state == STATE_ON
         own = self._is_own(new.context)
+        if not own:
+            # Touched by someone else: full-brightness mode must not switch it off later.
+            self._bright_turned_on.discard(entity_id)
 
         if not is_on:
             lamp.last_command = None

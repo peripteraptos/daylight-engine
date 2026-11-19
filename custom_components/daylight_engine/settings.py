@@ -12,8 +12,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from .const import SECTION_BRIGHTNESS, SECTION_KELVIN, SECTION_MANUAL, SECTION_SLEEP, SECTION_UPDATES
-from .engine import Curve, Ramp, SleepTarget, TargetConfig
+from .const import (
+    SECTION_BRIGHT,
+    SECTION_BRIGHTNESS,
+    SECTION_KELVIN,
+    SECTION_MANUAL,
+    SECTION_SLEEP,
+    SECTION_UPDATES,
+)
+from .engine import BrightTarget, Curve, Ramp, SleepTarget, TargetConfig
 
 
 def _curve_to_options(curve: Curve) -> dict[str, float]:
@@ -58,6 +65,10 @@ class ControllerSettings:
     reset_manual_on_off: bool = True
     manual_timeout: float = 0.0
     """Minutes after which a manual override expires, 0 = never."""
+    bright_timeout: float = 30.0
+    """Minutes after which full-brightness mode switches itself off, 0 = never."""
+    bright_turn_on: bool = False
+    """Full-brightness mode also switches on lights that are off (and off again afterwards)."""
 
 
 def default_options() -> dict[str, dict[str, Any]]:
@@ -67,6 +78,12 @@ def default_options() -> dict[str, dict[str, Any]]:
         SECTION_KELVIN: _curve_to_options(target.kelvin),
         SECTION_BRIGHTNESS: _curve_to_options(target.brightness),
         SECTION_SLEEP: {"brightness": target.sleep.brightness, "kelvin": target.sleep.kelvin},
+        SECTION_BRIGHT: {
+            "brightness": target.bright.brightness,
+            "kelvin": target.bright.kelvin,
+            "timeout": settings.bright_timeout,
+            "turn_on": settings.bright_turn_on,
+        },
         SECTION_UPDATES: {
             "interval": settings.interval,
             "transition": settings.transition,
@@ -102,12 +119,16 @@ def target_config_from_options(options: Mapping[str, Any]) -> TargetConfig:
             brightness=float(opts[SECTION_SLEEP]["brightness"]),
             kelvin=float(opts[SECTION_SLEEP]["kelvin"]),
         ),
+        bright=BrightTarget(
+            brightness=float(opts[SECTION_BRIGHT]["brightness"]),
+            kelvin=float(opts[SECTION_BRIGHT]["kelvin"]),
+        ),
     )
 
 
 def controller_settings_from_options(options: Mapping[str, Any]) -> ControllerSettings:
     opts = merged_options(options)
-    updates, manual = opts[SECTION_UPDATES], opts[SECTION_MANUAL]
+    updates, manual, bright = opts[SECTION_UPDATES], opts[SECTION_MANUAL], opts[SECTION_BRIGHT]
     return ControllerSettings(
         interval=max(5.0, float(updates["interval"])),
         transition=max(0.0, float(updates["transition"])),
@@ -117,4 +138,6 @@ def controller_settings_from_options(options: Mapping[str, Any]) -> ControllerSe
         detect_manual=bool(manual["detect"]),
         reset_manual_on_off=bool(manual["reset_on_off"]),
         manual_timeout=max(0.0, float(manual["timeout"])),
+        bright_timeout=max(0.0, float(bright["timeout"])),
+        bright_turn_on=bool(bright["turn_on"]),
     )

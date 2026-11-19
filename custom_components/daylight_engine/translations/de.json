@@ -64,6 +64,20 @@
               "kelvin": "Farbtemperatur"
             }
           },
+          "bright": {
+            "name": "Volle Helligkeit",
+            "description": "Modus z. B. zum Suchen: alle Lampen hell und neutral.",
+            "data": {
+              "brightness": "Helligkeit",
+              "kelvin": "Farbtemperatur",
+              "timeout": "Automatisch beenden nach",
+              "turn_on": "Ausgeschaltete Lampen einschalten"
+            },
+            "data_description": {
+              "timeout": "0 = nie",
+              "turn_on": "Beim Beenden werden genau diese Lampen wieder ausgeschaltet."
+            }
+          },
           "updates": {
             "name": "Aktualisierung",
             "data": {
@@ -185,6 +199,9 @@
       },
       "sleep": {
         "name": "Sleep-Modus"
+      },
+      "bright": {
+        "name": "Volle Helligkeit"
       }
     },
     "sensor": {

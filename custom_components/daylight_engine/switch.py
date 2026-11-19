@@ -18,7 +18,13 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: DaylightConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback
 ) -> None:
     controller = entry.runtime_data.controller
-    async_add_entities([EnabledSwitch(controller, entry.title), SleepSwitch(controller, entry.title)])
+    async_add_entities(
+        [
+            EnabledSwitch(controller, entry.title),
+            SleepSwitch(controller, entry.title),
+            BrightSwitch(controller, entry.title),
+        ]
+    )
 
 
 class EnabledSwitch(DaylightEntity, SwitchEntity, RestoreEntity):
@@ -70,3 +76,23 @@ class SleepSwitch(DaylightEntity, SwitchEntity, RestoreEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.controller.async_set_sleep(False)
+
+
+class BrightSwitch(DaylightEntity, SwitchEntity):
+    """Full brightness for all lamps, e.g. when searching for something.
+
+    Not restored after a restart on purpose: it is a temporary mode.
+    """
+
+    def __init__(self, controller, title: str) -> None:  # noqa: ANN001
+        super().__init__(controller, title, "bright")
+
+    @property
+    def is_on(self) -> bool:
+        return self.controller.bright
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.controller.async_set_bright(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.controller.async_set_bright(False)
