@@ -13,9 +13,10 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Import the engine as a standalone package so Home Assistant is not needed.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "custom_components" / "daylight_engine"))
 
-from custom_components.daylight_engine.engine import (  # noqa: E402
+from engine import (  # noqa: E402
     TargetConfig,
     compute_target,
     profile_from_dict,

@@ -1,0 +1,21 @@
+reset_manual:
+  fields:
+    entity_id:
+      selector:
+        entity:
+          domain: light
+          multiple: true
+
+apply:
+  fields:
+    entity_id:
+      selector:
+        entity:
+          domain: light
+          multiple: true
+    transition:
+      selector:
+        number:
+          min: 0
+          max: 300
+          unit_of_measurement: s

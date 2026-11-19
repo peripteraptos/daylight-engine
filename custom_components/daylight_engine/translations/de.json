@@ -1,0 +1,233 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Daylight Engine",
+        "description": "Lampen fügst du danach über „Lampe hinzufügen“ hinzu, die Tageslichtkurve stellst du unter „Konfigurieren“ ein.",
+        "data": {
+          "name": "Name"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Daylight Engine ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Tageslichtkurve",
+        "description": "Alle Werte gelten für alle Lampen. Die Lampen-Kalibrierung übersetzt sie pro Lampe.",
+        "sections": {
+          "kelvin": {
+            "name": "Farbtemperatur",
+            "data": {
+              "night": "Farbtemperatur nachts",
+              "day": "Farbtemperatur tagsüber",
+              "morning_low": "Morgens: Beginn bei Sonnenhöhe",
+              "morning_high": "Morgens: Tageswert erreicht bei",
+              "morning_shape": "Morgens: Kurvenform",
+              "evening_low": "Abends: Nachtwert erreicht bei",
+              "evening_high": "Abends: Beginn bei Sonnenhöhe",
+              "evening_shape": "Abends: Kurvenform"
+            },
+            "data_description": {
+              "morning_shape": "1 = gleichmäßig, größer = bleibt länger beim Nachtwert, kleiner = früher beim Tageswert",
+              "evening_shape": "1 = gleichmäßig, größer = bleibt länger beim Nachtwert, kleiner = früher beim Tageswert",
+              "morning_low": "Grad über (+) bzw. unter (−) dem Horizont",
+              "evening_low": "Grad über (+) bzw. unter (−) dem Horizont"
+            }
+          },
+          "brightness": {
+            "name": "Helligkeit",
+            "data": {
+              "night": "Helligkeit nachts",
+              "day": "Helligkeit tagsüber",
+              "morning_low": "Morgens: Beginn bei Sonnenhöhe",
+              "morning_high": "Morgens: Tageswert erreicht bei",
+              "morning_shape": "Morgens: Kurvenform",
+              "evening_low": "Abends: Nachtwert erreicht bei",
+              "evening_high": "Abends: Beginn bei Sonnenhöhe",
+              "evening_shape": "Abends: Kurvenform"
+            },
+            "data_description": {
+              "morning_shape": "1 = gleichmäßig, größer = bleibt länger beim Nachtwert, kleiner = früher beim Tageswert",
+              "evening_shape": "1 = gleichmäßig, größer = bleibt länger beim Nachtwert, kleiner = früher beim Tageswert",
+              "morning_low": "Grad über (+) bzw. unter (−) dem Horizont",
+              "evening_low": "Grad über (+) bzw. unter (−) dem Horizont"
+            }
+          },
+          "sleep": {
+            "name": "Sleep-Modus",
+            "data": {
+              "brightness": "Helligkeit",
+              "kelvin": "Farbtemperatur"
+            }
+          },
+          "updates": {
+            "name": "Aktualisierung",
+            "data": {
+              "interval": "Intervall",
+              "transition": "Übergangszeit",
+              "turn_on_transition": "Übergang beim Einschalten",
+              "min_brightness_change": "Mindeständerung Helligkeit",
+              "min_kelvin_change": "Mindeständerung Farbtemperatur"
+            },
+            "data_description": {
+              "min_brightness_change": "Kleinere Änderungen werden nicht gesendet – schont das Zigbee-Netz.",
+              "turn_on_transition": "0 = sofort korrigieren, wenn eine Lampe außerhalb von Home Assistant eingeschaltet wurde."
+            }
+          },
+          "manual": {
+            "name": "Manuelle Änderungen",
+            "data": {
+              "detect": "Erkennen",
+              "reset_on_off": "Beim Ausschalten zurücksetzen",
+              "timeout": "Automatisch zurücksetzen nach"
+            },
+            "data_description": {
+              "timeout": "0 = nie"
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "invalid_curve": "Ungültige Kurve: der Beginn muss unter dem Ende liegen und alle Werte im gültigen Bereich."
+    }
+  },
+  "config_subentries": {
+    "lamp": {
+      "entry_type": "Lampe",
+      "initiate_flow": {
+        "user": "Lampe hinzufügen"
+      },
+      "step": {
+        "user": {
+          "title": "Lampe hinzufügen",
+          "data": {
+            "name": "Name",
+            "lights": "Lampen",
+            "sleep_action": "Verhalten im Sleep-Modus"
+          },
+          "data_description": {
+            "lights": "Mehrere Lampen nur zusammenfassen, wenn sie dieselben Einstellungen haben. Die Kalibrierung erfolgt trotzdem pro Lampe."
+          },
+          "sections": {
+            "advanced": {
+              "name": "Erweitert",
+              "data": {
+                "transition_mode": "Übergänge",
+                "detect_manual": "Manuelle Änderungen erkennen"
+              },
+              "data_description": {
+                "transition_mode": "Automatisch = nur wenn die Lampe Übergänge meldet. Viele WLAN-Lampen springen trotzdem – dann 'Nie' wählen.",
+                "detect_manual": "Ändert jemand Helligkeit oder Farbe, pausiert die Lampe bis zum nächsten Aus/An."
+              }
+            }
+          }
+        },
+        "reconfigure": {
+          "title": "Lampe bearbeiten",
+          "data": {
+            "name": "Name",
+            "lights": "Lampen",
+            "sleep_action": "Verhalten im Sleep-Modus"
+          },
+          "data_description": {
+            "lights": "Mehrere Lampen nur zusammenfassen, wenn sie dieselben Einstellungen haben. Die Kalibrierung erfolgt trotzdem pro Lampe."
+          },
+          "sections": {
+            "advanced": {
+              "name": "Erweitert",
+              "data": {
+                "transition_mode": "Übergänge",
+                "detect_manual": "Manuelle Änderungen erkennen"
+              },
+              "data_description": {
+                "transition_mode": "Automatisch = nur wenn die Lampe Übergänge meldet. Viele WLAN-Lampen springen trotzdem – dann 'Nie' wählen.",
+                "detect_manual": "Ändert jemand Helligkeit oder Farbe, pausiert die Lampe bis zum nächsten Aus/An."
+              }
+            }
+          }
+        }
+      },
+      "error": {
+        "no_lights": "Bitte mindestens eine Lampe wählen.",
+        "light_in_use": "Eine der Lampen ist bereits in einem anderen Eintrag."
+      },
+      "abort": {
+        "reconfigure_successful": "Gespeichert."
+      }
+    }
+  },
+  "selector": {
+    "sleep_action": {
+      "options": {
+        "follow": "Sleep-Zielwert folgen",
+        "minimum": "Minimale Helligkeit",
+        "off": "Ausschalten",
+        "unchanged": "Nicht verändern"
+      }
+    },
+    "transition_mode": {
+      "options": {
+        "auto": "Automatisch",
+        "always": "Immer",
+        "never": "Nie"
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "enabled": {
+        "name": "Automatik"
+      },
+      "sleep": {
+        "name": "Sleep-Modus"
+      }
+    },
+    "sensor": {
+      "target_brightness": {
+        "name": "Ziel-Helligkeit"
+      },
+      "target_kelvin": {
+        "name": "Ziel-Farbtemperatur"
+      },
+      "sun_elevation": {
+        "name": "Sonnenhöhe"
+      }
+    }
+  },
+  "services": {
+    "reset_manual": {
+      "name": "Manuelle Steuerung aufheben",
+      "description": "Lampen wieder automatisch steuern. Ohne Auswahl gilt es für alle.",
+      "fields": {
+        "entity_id": {
+          "name": "Lampen",
+          "description": "Optional"
+        }
+      }
+    },
+    "apply": {
+      "name": "Jetzt anwenden",
+      "description": "Aktuellen Zielwert sofort an die eingeschalteten Lampen senden.",
+      "fields": {
+        "entity_id": {
+          "name": "Lampen",
+          "description": "Optional"
+        },
+        "transition": {
+          "name": "Übergang",
+          "description": "Sekunden"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Daylight Engine ist nicht geladen."
+    }
+  }
+}

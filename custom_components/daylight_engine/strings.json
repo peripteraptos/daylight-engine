@@ -1,0 +1,233 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Daylight Engine",
+        "description": "Add lights afterwards with “Add light”; adjust the daylight curve under “Configure”.",
+        "data": {
+          "name": "Name"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Daylight Engine is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Daylight curve",
+        "description": "These values apply to all lights; each light's calibration translates them.",
+        "sections": {
+          "kelvin": {
+            "name": "Colour temperature",
+            "data": {
+              "night": "Colour temperature at night",
+              "day": "Colour temperature during the day",
+              "morning_low": "Morning: start at sun elevation",
+              "morning_high": "Morning: day value reached at",
+              "morning_shape": "Morning: curve shape",
+              "evening_low": "Evening: night value reached at",
+              "evening_high": "Evening: start at sun elevation",
+              "evening_shape": "Evening: curve shape"
+            },
+            "data_description": {
+              "morning_shape": "1 = even, higher = stays near the night value longer, lower = reaches day value earlier",
+              "evening_shape": "1 = even, higher = stays near the night value longer, lower = reaches day value earlier",
+              "morning_low": "Degrees above (+) or below (−) the horizon",
+              "evening_low": "Degrees above (+) or below (−) the horizon"
+            }
+          },
+          "brightness": {
+            "name": "Brightness",
+            "data": {
+              "night": "Brightness at night",
+              "day": "Brightness during the day",
+              "morning_low": "Morning: start at sun elevation",
+              "morning_high": "Morning: day value reached at",
+              "morning_shape": "Morning: curve shape",
+              "evening_low": "Evening: night value reached at",
+              "evening_high": "Evening: start at sun elevation",
+              "evening_shape": "Evening: curve shape"
+            },
+            "data_description": {
+              "morning_shape": "1 = even, higher = stays near the night value longer, lower = reaches day value earlier",
+              "evening_shape": "1 = even, higher = stays near the night value longer, lower = reaches day value earlier",
+              "morning_low": "Degrees above (+) or below (−) the horizon",
+              "evening_low": "Degrees above (+) or below (−) the horizon"
+            }
+          },
+          "sleep": {
+            "name": "Sleep mode",
+            "data": {
+              "brightness": "Brightness",
+              "kelvin": "Colour temperature"
+            }
+          },
+          "updates": {
+            "name": "Updates",
+            "data": {
+              "interval": "Interval",
+              "transition": "Transition",
+              "turn_on_transition": "Transition when switched on",
+              "min_brightness_change": "Minimum brightness change",
+              "min_kelvin_change": "Minimum colour temperature change"
+            },
+            "data_description": {
+              "min_brightness_change": "Smaller changes are not sent, which keeps Zigbee traffic low.",
+              "turn_on_transition": "0 = correct immediately when a light was switched on outside Home Assistant."
+            }
+          },
+          "manual": {
+            "name": "Manual changes",
+            "data": {
+              "detect": "Detect",
+              "reset_on_off": "Reset when switched off",
+              "timeout": "Reset automatically after"
+            },
+            "data_description": {
+              "timeout": "0 = never"
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "invalid_curve": "Invalid curve: start elevation must be below end elevation and values in range."
+    }
+  },
+  "config_subentries": {
+    "lamp": {
+      "entry_type": "Light",
+      "initiate_flow": {
+        "user": "Add light"
+      },
+      "step": {
+        "user": {
+          "title": "Add light",
+          "data": {
+            "name": "Name",
+            "lights": "Lights",
+            "sleep_action": "Behaviour in sleep mode"
+          },
+          "data_description": {
+            "lights": "Only group lights that share the same settings. Calibration is still per light."
+          },
+          "sections": {
+            "advanced": {
+              "name": "Advanced",
+              "data": {
+                "transition_mode": "Transitions",
+                "detect_manual": "Detect manual changes"
+              },
+              "data_description": {
+                "transition_mode": "Automatic = only if the light reports transition support. Many Wi-Fi lights jump anyway – choose 'never' then.",
+                "detect_manual": "If someone changes brightness or colour, the light pauses until it is switched off/on."
+              }
+            }
+          }
+        },
+        "reconfigure": {
+          "title": "Edit light",
+          "data": {
+            "name": "Name",
+            "lights": "Lights",
+            "sleep_action": "Behaviour in sleep mode"
+          },
+          "data_description": {
+            "lights": "Only group lights that share the same settings. Calibration is still per light."
+          },
+          "sections": {
+            "advanced": {
+              "name": "Advanced",
+              "data": {
+                "transition_mode": "Transitions",
+                "detect_manual": "Detect manual changes"
+              },
+              "data_description": {
+                "transition_mode": "Automatic = only if the light reports transition support. Many Wi-Fi lights jump anyway – choose 'never' then.",
+                "detect_manual": "If someone changes brightness or colour, the light pauses until it is switched off/on."
+              }
+            }
+          }
+        }
+      },
+      "error": {
+        "no_lights": "Select at least one light.",
+        "light_in_use": "One of the lights is already used in another entry."
+      },
+      "abort": {
+        "reconfigure_successful": "Saved."
+      }
+    }
+  },
+  "selector": {
+    "sleep_action": {
+      "options": {
+        "follow": "Follow sleep target",
+        "minimum": "Minimum brightness",
+        "off": "Turn off",
+        "unchanged": "Leave unchanged"
+      }
+    },
+    "transition_mode": {
+      "options": {
+        "auto": "Automatic",
+        "always": "Always",
+        "never": "Never"
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "enabled": {
+        "name": "Automatic control"
+      },
+      "sleep": {
+        "name": "Sleep mode"
+      }
+    },
+    "sensor": {
+      "target_brightness": {
+        "name": "Target brightness"
+      },
+      "target_kelvin": {
+        "name": "Target colour temperature"
+      },
+      "sun_elevation": {
+        "name": "Sun elevation"
+      }
+    }
+  },
+  "services": {
+    "reset_manual": {
+      "name": "Reset manual control",
+      "description": "Resume automatic control. Applies to all lights if none are selected.",
+      "fields": {
+        "entity_id": {
+          "name": "Lights",
+          "description": "Optional"
+        }
+      }
+    },
+    "apply": {
+      "name": "Apply now",
+      "description": "Send the current target to all lights that are on right now.",
+      "fields": {
+        "entity_id": {
+          "name": "Lights",
+          "description": "Optional"
+        },
+        "transition": {
+          "name": "Transition",
+          "description": "Seconds"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Daylight Engine is not loaded."
+    }
+  }
+}

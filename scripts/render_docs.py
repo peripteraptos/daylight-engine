@@ -19,16 +19,17 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.collections import LineCollection  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+# Import the engine as a standalone package so Home Assistant is not needed.
+sys.path.insert(0, str(ROOT / "custom_components" / "daylight_engine"))
 
-from custom_components.daylight_engine.engine import (  # noqa: E402
+from engine import (  # noqa: E402
     RgbSegment,
     TargetConfig,
     compute_target,
     profile_from_dict,
     solar_position,
 )
-from custom_components.daylight_engine.engine.color import kelvin_to_rgb  # noqa: E402
+from engine.color import kelvin_to_rgb  # noqa: E402
 
 OUT = ROOT / "docs"
 LAT, LON, TZ = 52.52, 13.405, ZoneInfo("Europe/Berlin")
