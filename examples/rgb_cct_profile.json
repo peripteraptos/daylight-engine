@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "type": "dimmable",
+  "name": "Beispiel RGB+CCT",
+  "kelvin_min": 2200,
+  "kelvin_max": 6500,
+  "hysteresis": 1.0,
+  "segments": [
+    {
+      "type": "rgb",
+      "end": 10,
+      "min_kelvin": 1800,
+      "max_kelvin": 2700,
+      "points": [
+        {
+          "logical": 0,
+          "device": 1,
+          "gains": [
+            1,
+            0.8,
+            0.6
+          ]
+        },
+        {
+          "logical": 10,
+          "device": 40,
+          "gains": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ]
+    },
+    {
+      "type": "cct",
+      "end": 100,
+      "points": [
+        {
+          "logical": 10,
+          "device": 1
+        },
+        {
+          "logical": 100,
+          "device": 100
+        }
+      ]
+    }
+  ]
+}

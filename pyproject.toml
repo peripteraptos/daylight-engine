@@ -1,0 +1,19 @@
+[project]
+name = "daylight-engine"
+version = "0.1.0"
+description = "Daylight-following light control for Home Assistant"
+requires-python = ">=3.13"
+
+[project.optional-dependencies]
+test = ["pytest>=8", "astral>=3.2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 110
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
