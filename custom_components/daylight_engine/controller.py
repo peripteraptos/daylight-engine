@@ -173,6 +173,13 @@ class DaylightController:
 
     @callback
     def async_start(self) -> None:
+        _LOGGER.debug(
+            "Starting with %d light(s): %s (location %.3f, %.3f)",
+            len(self.lamps),
+            ", ".join(self.lamps) or "none",
+            self.hass.config.latitude,
+            self.hass.config.longitude,
+        )
         self._recompute_target()
         self._notify()
         if self.lamps:
@@ -270,7 +277,7 @@ class DaylightController:
             supported_features=features,
         )
         lamp.profile = default_profile(caps, name=lamp.entity_id)
-        _LOGGER.debug("Detected %s for %s", caps, lamp.entity_id)
+        _LOGGER.debug("%s: detected %s -> %s profile", lamp.entity_id, caps, lamp.profile.kind)
 
     def _significant_change(self, lamp: LampState, target: Target) -> bool:
         if lamp.last_target is None:
@@ -309,8 +316,17 @@ class DaylightController:
     ) -> None:
         """Send the current target to lamps that are on and not under manual control."""
         if not self.enabled:
+            _LOGGER.debug("Apply skipped: automatic control is off")
             return
         target = self.target or self._recompute_target()
+        _LOGGER.debug(
+            "Apply (force=%s, turned_on=%s): target %.1f %% / %.0f K (%s)",
+            force,
+            turned_on,
+            target.brightness,
+            target.kelvin,
+            target.mode,
+        )
         if transition is None:
             transition = self.settings.turn_on_transition if turned_on else self.settings.transition
         now = dt_util.utcnow()
@@ -322,11 +338,14 @@ class DaylightController:
                 continue
             state = self.hass.states.get(entity_id)
             if state is None or state.state != STATE_ON:
+                _LOGGER.debug("%s: skipped, state is %s", entity_id, None if state is None else state.state)
                 continue
             if lamp.manual:
+                _LOGGER.debug("%s: skipped, under manual control", entity_id)
                 continue
             self._ensure_profile(lamp, state)
             if lamp.profile is None:
+                _LOGGER.debug("%s: skipped, no profile (attributes not available yet)", entity_id)
                 continue
             if not force and not self._significant_change(lamp, target):
                 continue
@@ -334,6 +353,7 @@ class DaylightController:
             command = self._command_for(lamp, target, turned_on=turned_on)
             lamp.last_target = (target.brightness, target.kelvin, target.mode)
             if command is None:
+                _LOGGER.debug("%s: nothing to do for %s profile", entity_id, lamp.profile.kind)
                 continue
 
             data = command.to_service_data()
@@ -352,6 +372,7 @@ class DaylightController:
             batch.entity_ids.append(entity_id)
 
         for batch in batches.values():
+            _LOGGER.debug("Sending light.%s %s to %s", batch.service, batch.data, batch.entity_ids)
             context = Context()
             self._own_contexts.append(context.id)
             await self.hass.services.async_call(
@@ -408,6 +429,7 @@ class DaylightController:
         if not was_on:
             if own:
                 return
+            _LOGGER.debug("%s switched on externally, correcting", entity_id)
             # Switched on by someone else (UI, wall switch, app): correct immediately.
             if lamp.manual:
                 lamp.manual, lamp.manual_since = False, None
