@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections import deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from functools import partial
 from typing import Any
 
 from homeassistant.components.light import (
@@ -80,6 +82,7 @@ _LOGGER = logging.getLogger(__name__)
 # State reports arriving this long after our own command (plus its transition)
 # are attributed to that command, not to the user.
 REPORT_GRACE = timedelta(seconds=5)
+DEFAULT_PREVIEW_INTERVAL = 0.25  # seconds between preview commands per lamp
 BRIGHTNESS_TOLERANCE = 3  # HA units (0-255)
 KELVIN_TOLERANCE = 60
 RGB_TOLERANCE = 12
@@ -134,6 +137,25 @@ class LampState:
 
 
 @dataclass(slots=True)
+class _PreviewState:
+    pending: DeviceCommand | None = None
+    last_sent: DeviceCommand | None = None
+    last_time: float = 0.0
+    min_interval: float = 0.25
+    timer: CALLBACK_TYPE | None = None
+
+
+def _same_output(a: DeviceCommand, b: DeviceCommand) -> bool:
+    """Same light output, even if computed in a different segment."""
+    return (a.on, a.brightness, a.color_temp_kelvin, a.rgb_color) == (
+        b.on,
+        b.brightness,
+        b.color_temp_kelvin,
+        b.rgb_color,
+    )
+
+
+@dataclass(slots=True)
 class _Batch:
     service: str
     data: dict[str, Any]
@@ -170,6 +192,7 @@ class DaylightController:
         """Lights currently driven by the calibration panel; the controller leaves them alone."""
         self._bright_turned_on: set[str] = set()
         self._bright_timer: CALLBACK_TYPE | None = None
+        self._previews: dict[str, _PreviewState] = {}
         self.position: SolarPosition | None = None
         self.target: Target | None = None
 
@@ -204,6 +227,8 @@ class DaylightController:
     @callback
     def async_stop(self) -> None:
         self._cancel_bright_timer()
+        for entity_id in list(self._previews):
+            self._reset_preview(entity_id)
         while self._unsubs:
             self._unsubs.pop()()
 
@@ -315,12 +340,14 @@ class DaylightController:
         if entity_id not in self.lamps:
             raise KeyError(entity_id)
         self.calibrating.add(entity_id)
+        self._reset_preview(entity_id)
         state = self.hass.states.get(entity_id)
         return state is not None and state.state == STATE_ON
 
     async def async_calibration_end(self, entity_id: str, *, was_on: bool) -> None:
         """Give the lamp back: switch it off again or re-apply the current target."""
         self.calibrating.discard(entity_id)
+        self._reset_preview(entity_id)
         lamp = self.lamps.get(entity_id)
         if lamp is None:
             return
@@ -333,17 +360,80 @@ class DaylightController:
             await self.async_apply(entity_ids=[entity_id], force=True, transition=0)
 
     async def async_preview(
-        self, entity_id: str, profile: Profile, logical: float, kelvin: float
+        self,
+        entity_id: str,
+        profile: Profile,
+        logical: float,
+        kelvin: float,
+        *,
+        min_interval: float = DEFAULT_PREVIEW_INTERVAL,
     ) -> DeviceCommand:
-        """Drive a lamp directly with a (possibly unsaved) profile."""
+        """Drive a lamp directly with a (possibly unsaved) profile.
+
+        Zigbee lamps drop commands when flooded, so previews are coalesced per
+        lamp: at most one command per ``min_interval`` seconds, always the most
+        recent value, identical commands are skipped and only changed
+        attributes are sent.
+        """
         lamp = self.lamps[entity_id]
         self._ensure_profile(lamp, self.hass.states.get(entity_id))
         command = profile.resolve(logical, kelvin)
-        data = command.to_service_data()
-        if command.on and lamp.use_transition():
-            data[ATTR_TRANSITION] = 0
-        await self._async_send(command.service, data, [entity_id])
+        preview = self._previews.setdefault(entity_id, _PreviewState())
+        preview.pending = command
+        preview.min_interval = max(0.05, min(2.0, min_interval))
+        if preview.timer is None:
+            wait = preview.last_time + preview.min_interval - time.monotonic()
+            if wait <= 0:
+                await self._async_flush_preview(entity_id)
+            else:
+                preview.timer = async_call_later(
+                    self.hass, wait, partial(self._handle_preview_timer, entity_id)
+                )
         return command
+
+    @callback
+    def _handle_preview_timer(self, entity_id: str, _now: datetime) -> None:
+        preview = self._previews.get(entity_id)
+        if preview is not None:
+            preview.timer = None
+            self.hass.async_create_task(self._async_flush_preview(entity_id), eager_start=True)
+
+    async def _async_flush_preview(self, entity_id: str) -> None:
+        preview = self._previews.get(entity_id)
+        if preview is None or preview.pending is None or entity_id not in self.calibrating:
+            return
+        command, preview.pending = preview.pending, None
+        last = preview.last_sent
+        if command == last or (last is not None and _same_output(command, last)):
+            return
+        preview.last_sent = command
+        preview.last_time = time.monotonic()
+        if not command.on:
+            await self._async_send("turn_off", {}, [entity_id])
+            return
+        data: dict[str, Any] = {}
+        if last is None or not last.on or last.brightness != command.brightness:
+            data["brightness"] = command.brightness
+        if (
+            last is None
+            or not last.on
+            or last.color_temp_kelvin != command.color_temp_kelvin
+            or last.rgb_color != command.rgb_color
+        ):
+            if command.color_temp_kelvin is not None:
+                data["color_temp_kelvin"] = command.color_temp_kelvin
+            if command.rgb_color is not None:
+                data["rgb_color"] = list(command.rgb_color)
+        if command.brightness is None:
+            data.pop("brightness", None)
+        if self.lamps[entity_id].use_transition():
+            data[ATTR_TRANSITION] = 0
+        await self._async_send("turn_on", data, [entity_id])
+
+    def _reset_preview(self, entity_id: str) -> None:
+        preview = self._previews.pop(entity_id, None)
+        if preview is not None and preview.timer is not None:
+            preview.timer()
 
     @property
     def manual_lamps(self) -> list[str]:

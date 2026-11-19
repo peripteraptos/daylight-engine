@@ -40,6 +40,7 @@ export const hass = {
           return { lamps: clone(lamps), target: { brightness: 40, kelvin: 2200, mode: "daylight" } };
         case "daylight_engine/preview": {
           if (!lamp.calibrating) throw { code: "not_calibrating", message: "Start a calibration session first" };
+          if (msg.min_interval_ms == null) throw { code: "invalid", message: "min_interval_ms missing" };
           const cmd = resolve(msg.profile ?? lamp.profile, msg.logical, msg.kelvin);
           const out = { service: cmd.on ? "turn_on" : "turn_off", segment: cmd.segment };
           if (cmd.on && cmd.brightness) out.brightness = cmd.brightness;

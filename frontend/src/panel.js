@@ -5,6 +5,21 @@ import { translator } from "./i18n.js";
 const WS = "daylight_engine/";
 const SEG_COLOR = { rgb: "#eb6834", cct: "#2a78d6" };
 const rgbCss = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+// Per-browser convenience settings; storage may be unavailable (private mode, iframes).
+const readSetting = (key) => {
+  try {
+    return localStorage.getItem(`daylight_engine.${key}`);
+  } catch (_err) {
+    return null;
+  }
+};
+const writeSetting = (key, value) => {
+  try {
+    localStorage.setItem(`daylight_engine.${key}`, String(value));
+  } catch (_err) {
+    /* ignore */
+  }
+};
 const fmt = (v, d = 1) => (Math.round(v * 10 ** d) / 10 ** d).toLocaleString(undefined, { maximumFractionDigits: d });
 
 class DaylightEnginePanel extends LitElement {
@@ -25,6 +40,7 @@ class DaylightEnginePanel extends LitElement {
     _play: { state: true },
     _reference: { state: true },
     _zoom: { state: true },
+    _interval: { state: true },
     _lastCmd: { state: true },
     _message: { state: true },
     _showJson: { state: true },
@@ -42,6 +58,7 @@ class DaylightEnginePanel extends LitElement {
     this._play = { from: 0, to: 100, duration: 10, pingpong: false };
     this._reference = "";
     this._zoom = false;
+    this._interval = Number(readSetting("previewInterval")) || 250;
     this._sessions = new Map();
     this._inflight = false;
     this._pending = false;
@@ -192,8 +209,9 @@ class DaylightEnginePanel extends LitElement {
     const logical = this._logical;
     const kelvin = this._kelvin;
     try {
-      const jobs = [this._ws("preview", { entity_id: this._selected, profile: this._draft, logical, kelvin })];
-      if (this._reference) jobs.push(this._ws("preview", { entity_id: this._reference, logical, kelvin }));
+      const min_interval_ms = this._interval;
+      const jobs = [this._ws("preview", { entity_id: this._selected, profile: this._draft, logical, kelvin, min_interval_ms })];
+      if (this._reference) jobs.push(this._ws("preview", { entity_id: this._reference, logical, kelvin, min_interval_ms }));
       const [cmd] = await Promise.all(jobs);
       this._lastCmd = cmd;
     } catch (err) {
@@ -460,6 +478,16 @@ class DaylightEnginePanel extends LitElement {
         </label>
       </div>
       <p class="hint">${t("live_hint")}</p>
+      <label class="tempo">${t("tempo")}
+        <select @change=${(e) => {
+          this._interval = +e.target.value;
+          writeSetting("previewInterval", this._interval);
+        }}>
+          ${[[500, "tempo_gentle"], [250, "tempo_normal"], [100, "tempo_fast"]].map(
+            ([ms, key]) => html`<option value=${ms} ?selected=${this._interval === ms}>${t(key)}</option>`,
+          )}
+        </select>
+      </label>
       <div class="slider-row">
         <label>${t("logical")}</label>
         <input type="range" min="0" max="100" step="0.1" .value=${String(this._logical)}
@@ -796,6 +824,7 @@ class DaylightEnginePanel extends LitElement {
     input[type="number"] { width: 72px; }
     .unit { color: var(--secondary-text-color); }
     label { color: var(--primary-text-color); font-size: 14px; }
+    label.tempo { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     label.check, label.switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
     label.switch input { width: 36px; height: 20px; accent-color: var(--primary-color); }
     button.primary, button.text {

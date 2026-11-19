@@ -3,7 +3,11 @@ from typing import Any
 import pytest
 from homeassistant.config_entries import ConfigSubentryData
 from homeassistant.core import Context, HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+    async_mock_service,
+)
 
 from custom_components.daylight_engine.const import DOMAIN, STORAGE_KEY_PROFILES, SUBENTRY_LAMP
 from custom_components.daylight_engine.engine import profile_from_dict
@@ -180,3 +184,57 @@ async def test_unknown_lamp(hass: HomeAssistant, setup, hass_ws_client) -> None:
     client = await hass_ws_client(hass)
     await client.send_json_auto_id({"type": "daylight_engine/calibrate", "entity_id": "light.nope"})
     assert (await client.receive_json())["error"]["code"] == "unknown_lamp"
+
+
+async def test_preview_is_coalesced_and_diffed(hass: HomeAssistant, setup, hass_ws_client, freezer) -> None:
+    """Rapid previews (sliders, playback) must not flood Zigbee."""
+    entry, calls_on, _ = setup
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "daylight_engine/calibrate", "entity_id": "light.lamp"})
+    assert (await client.receive_json())["success"]
+
+    async def preview(logical: float, kelvin: float = 2700) -> None:
+        await client.send_json_auto_id(
+            {
+                "type": "daylight_engine/preview",
+                "entity_id": "light.lamp",
+                "logical": logical,
+                "kelvin": kelvin,
+                "min_interval_ms": 300,
+            }
+        )
+        assert (await client.receive_json())["success"]
+
+    # First command goes out immediately and complete
+    await preview(20)
+    await hass.async_block_till_done()
+    assert len(calls_on) == 1
+    assert set(calls_on[0].data) >= {"brightness", "color_temp_kelvin"}
+
+    # A burst within the interval: nothing is sent yet ...
+    for logical in (21, 22, 23, 24, 25):
+        await preview(logical)
+    await hass.async_block_till_done()
+    assert len(calls_on) == 1
+
+    # ... then only the latest value, and only the brightness (kelvin unchanged)
+    freezer.tick(0.35)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert len(calls_on) == 2
+    assert "color_temp_kelvin" not in calls_on[1].data
+    expected = entry.runtime_data.controller.profile_for("light.lamp").resolve(25, 2700)
+    assert calls_on[1].data["brightness"] == expected.brightness
+
+    # Same output again (e.g. slow playback within one 1/255 step) is not re-sent
+    freezer.tick(0.35)
+    await preview(25.05)
+    await hass.async_block_till_done()
+    assert len(calls_on) == 2
+
+    # Changing only the colour temperature sends only that
+    freezer.tick(0.35)
+    await preview(25, kelvin=4000)
+    await hass.async_block_till_done()
+    assert calls_on[-1].data.get("color_temp_kelvin") == 4000
+    assert "brightness" not in calls_on[-1].data

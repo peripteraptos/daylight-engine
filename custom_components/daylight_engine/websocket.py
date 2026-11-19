@@ -171,6 +171,7 @@ def ws_calibrate(hass: HomeAssistant, connection: websocket_api.ActiveConnection
         vol.Optional("profile"): dict,
         vol.Required("logical"): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
         vol.Required("kelvin"): vol.All(vol.Coerce(float), vol.Range(min=1000, max=10000)),
+        vol.Optional("min_interval_ms"): vol.All(vol.Coerce(int), vol.Range(min=50, max=2000)),
     }
 )
 @websocket_api.require_admin
@@ -195,5 +196,11 @@ async def ws_preview(hass: HomeAssistant, connection: websocket_api.ActiveConnec
         if profile is None:
             connection.send_error(msg["id"], "unavailable", "Lamp is unavailable")
             return
-    command = await controller.async_preview(entity_id, profile, msg["logical"], msg["kelvin"])
+    command = await controller.async_preview(
+        entity_id,
+        profile,
+        msg["logical"],
+        msg["kelvin"],
+        min_interval=msg.get("min_interval_ms", 250) / 1000,
+    )
     connection.send_result(msg["id"], _command_dict(command))
